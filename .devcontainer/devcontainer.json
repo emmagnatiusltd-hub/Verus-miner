@@ -1,0 +1,22 @@
+{
+  "name": "Mining Container",
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "features": {
+    "ghcr.io/devcontainers/features/curl": "1",
+    "ghcr.io/devcontainers/features/python": "latest",
+    "ghcr.io/devcontainers/features/ubuntu": "latest"
+  },
+  "settings": {},
+  "extensions": [
+    "ms-vscode.csharp",  // Add any extensions you want
+    "ms-vscode.remote-repositories" // Optional, useful for remote connections
+  ],
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y build-essential libcurl4-openssl-dev libjansson-dev libssl-dev libgmp-dev",
+  "runArgs": [
+    "--cpus", "4",        // Set this to the number of CPUs you want to use
+    "--memory", "4g"      // Set this to the amount of memory
+  ],
+  "environment": {
+    "MINER_THREADS": "4"
+  }
+}
